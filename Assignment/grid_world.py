@@ -249,10 +249,9 @@ class GridWorldEnvironment:
                                             0.3, facecolor=colors[i])
                 self.ax.add_patch(agent_circle)
                 
-                # Draw direction indicator and update order
-                direction = "→" if agent.direction else "←"
+                # Draw agent ID and update order
                 self.ax.text(agent.position[1] + 0.5, self.n - agent.position[0] - 0.5, 
-                           f'A{i}{direction}({agent.update_order})', ha='center', va='center', color='white')
+                           f'A{i}({agent.update_order})', ha='center', va='center', color='white')
                 
                 # Draw item indicator if carrying
                 if agent.has_item:
