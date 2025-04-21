@@ -12,6 +12,7 @@ class QTableAgent:
         self.direction = None  # True for A->B, False for B->A
         self.position = None
         self.local_mask = 0  # 8-bit mask for neighboring agents
+        self.update_order = None  # Position in the update sequence
 
     def choose_action(self, state): 
         # hook for the policy
@@ -43,7 +44,37 @@ class GridWorldEnvironment:
             (0, -1),   # W
             (-1, -1)   # NW
         ]
+        
+        # Initialize central clock
+        self.clock = 0
+        self.update_sequence = None
+        self.set_update_sequence()  # Set initial update sequence
      
+    def set_update_sequence(self, sequence_type='round_robin'):
+        """
+        Set the update sequence for agents.
+        sequence_type can be:
+        - 'round_robin': agents take turns in order
+        - 'random': random order each time
+        - 'fixed': fixed order based on agent IDs
+        """
+        if sequence_type == 'round_robin':
+            self.update_sequence = list(range(self.num_agents))
+        elif sequence_type == 'random':
+            self.update_sequence = np.random.permutation(self.num_agents).tolist()
+        elif sequence_type == 'fixed':
+            self.update_sequence = sorted(range(self.num_agents))
+        
+        # Assign update order to each agent
+        for i, agent_id in enumerate(self.update_sequence):
+            self.agents[agent_id].update_order = i
+    
+    def get_next_agent(self):
+        """Get the next agent to update based on the current clock"""
+        agent_id = self.update_sequence[self.clock % self.num_agents]
+        self.clock += 1
+        return agent_id
+
     def get_local_mask(self, agent_id):
         """
         Returns an 8-bit mask indicating presence of opposite-direction agents
@@ -82,7 +113,11 @@ class GridWorldEnvironment:
                 agent.direction = False  # B->A
             agent.has_item = 0
             agent.local_mask = 0
-      
+        
+        # Reset clock and update sequence
+        self.clock = 0
+        self.set_update_sequence()
+
     def get_state(self, agent_id):
         agent = self.agents[agent_id]
         # Update local mask before returning state
@@ -160,10 +195,10 @@ class GridWorldEnvironment:
                                             0.3, facecolor=colors[i])
                 self.ax.add_patch(agent_circle)
                 
-                # Draw direction indicator
+                # Draw direction indicator and update order
                 direction = "→" if agent.direction else "←"
                 self.ax.text(agent.position[1] + 0.5, self.n - agent.position[0] - 0.5, 
-                           f'A{i}{direction}', ha='center', va='center', color='white')
+                           f'A{i}{direction}({agent.update_order})', ha='center', va='center', color='white')
                 
                 # Draw item indicator if carrying
                 if agent.has_item:
@@ -193,7 +228,7 @@ class GridWorldEnvironment:
         self.ax.set_yticks([])
         
         # Add status information
-        title = f'Grid World - Step: {steps}/100\nTotal Reward: {total_reward}'
+        title = f'Grid World - Step: {steps}/100 - Clock: {self.clock}\nTotal Reward: {total_reward}'
         plt.title(title)
         
         plt.draw()
@@ -226,8 +261,9 @@ if __name__ == "__main__":
         reward_per_episode = 0
         
         while number_of_steps <= max_steps and not environment.check_done():
-            # Each agent takes its turn in sequence
-            for agent_id in range(environment.num_agents):
+            # Each agent takes its turn in sequence based on the clock
+            for _ in range(environment.num_agents):
+                agent_id = environment.get_next_agent()
                 state = environment.get_state(agent_id)
                 action = environment.agents[agent_id].choose_action(state)
                 reward = environment.take_action(agent_id, action)
