@@ -55,6 +55,9 @@ class GridWorldEnvironment:
         # Collision tracking
         self.collision_count = 0
         self.collision_penalty = -20  # Penalty for head-on collision
+        
+        # Delivery tracking
+        self.delivery_count = 0  # Track number of successful deliveries
      
     def set_update_sequence(self, sequence_type='round_robin'):
         """
@@ -127,6 +130,7 @@ class GridWorldEnvironment:
         self.clock = 0
         self.set_update_sequence()
         self.collision_count = 0
+        self.delivery_count = 0  # Reset delivery count
 
     def get_state(self, agent_id):
         agent = self.agents[agent_id]
@@ -215,6 +219,7 @@ class GridWorldEnvironment:
         elif next_position == self.nest_location and agent.has_item:
             agent.has_item = 0
             reward = self.rewards[next_position]
+            self.delivery_count += 1  # Increment delivery count on successful dropoff
             
         agent.position = next_position
         return reward
@@ -277,7 +282,7 @@ class GridWorldEnvironment:
         self.ax.set_yticks([])
         
         # Add status information
-        title = f'Grid World - Step: {steps}/100 - Clock: {self.clock}\nTotal Reward: {total_reward} - Collisions: {self.collision_count}'
+        title = f'Grid World - Step: {steps}/100 - Clock: {self.clock}\nTotal Reward: {total_reward} - Collisions: {self.collision_count} - Deliveries: {self.delivery_count}'
         plt.title(title)
         
         plt.draw()
