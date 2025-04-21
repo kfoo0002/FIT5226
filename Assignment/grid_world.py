@@ -12,7 +12,7 @@ class QTableAgent:
         self.direction = None  # True for A->B, False for B->A
         self.position = None
 
-    def choose_action(self, state):
+    def choose_action(self, state): 
         # hook for the policy
         return np.random.randint(num_actions)
 
