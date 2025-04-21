@@ -114,10 +114,11 @@ class GridWorldEnvironment:
             if np.random.random() < 0.5:
                 agent.position = self.food_source_location
                 agent.direction = True  # A->B
+                agent.has_item = 1  # Start with item if at A
             else:
                 agent.position = self.nest_location
                 agent.direction = False  # B->A
-            agent.has_item = 0
+                agent.has_item = 0  # No item if starting at B
             agent.local_mask = 0
             agent.previous_position = None
             agent.collision_penalty = 0
@@ -136,16 +137,20 @@ class GridWorldEnvironment:
                 agent.local_mask)  # Include local mask in state
 
     def check_done(self):
-        # Check if all agents have completed their tasks
+        # Check if all agents have completed their delivery missions
         for agent in self.agents:
-            if agent.direction and agent.position != self.nest_location:
-                return False
-            if not agent.direction and agent.position != self.food_source_location:
+            # Mission is complete if agent is at B without an item (has delivered)
+            if agent.position == self.nest_location and not agent.has_item:
+                continue
+            # Mission is not complete if agent is at A with an item (just picked up)
+            # or if agent is carrying an item but not at B
+            if (agent.position == self.food_source_location and agent.has_item) or \
+               (agent.has_item and agent.position != self.nest_location):
                 return False
         return True
     
     def check_collisions(self):
-        """Check for head-on collisions after all agents have moved"""
+        """Check for collisions between agents with different item states"""
         # Create a dictionary to track positions and agents
         position_agents = {}
         
@@ -165,18 +170,18 @@ class GridWorldEnvironment:
             if position == self.food_source_location or position == self.nest_location:
                 continue
                 
-            # Check if this is a head-on collision
-            has_a_to_b = False
-            has_b_to_a = False
+            # Check if agents with different item states are colliding
+            has_item = False
+            no_item = False
             
             for agent in agents:
-                if agent.direction:  # A->B
-                    has_a_to_b = True
-                else:  # B->A
-                    has_b_to_a = True
+                if agent.has_item:
+                    has_item = True
+                else:
+                    no_item = True
             
-            # If both directions are present, it's a head-on collision
-            if has_a_to_b and has_b_to_a:
+            # If both item states are present, it's a collision
+            if has_item and no_item:
                 self.collision_count += 1
                 # Apply penalty to all agents involved
                 for agent in agents:
@@ -202,20 +207,14 @@ class GridWorldEnvironment:
         # Update agent's state and calculate reward
         reward = -1  # Default step penalty
         
-        if agent.direction:  # A->B
-            if not agent.has_item and next_position == self.food_source_location:
-                agent.has_item = 1
-                reward = self.rewards[next_position]
-            elif agent.has_item and next_position == self.nest_location:
-                agent.has_item = 0
-                reward = self.rewards[next_position]
-        else:  # B->A
-            if not agent.has_item and next_position == self.nest_location:
-                agent.has_item = 1
-                reward = self.rewards[next_position]
-            elif agent.has_item and next_position == self.food_source_location:
-                agent.has_item = 0
-                reward = self.rewards[next_position]
+        # Check for automatic pickup at A
+        if next_position == self.food_source_location:
+            agent.has_item = 1
+            reward = self.rewards[next_position]
+        # Check for automatic dropoff at B
+        elif next_position == self.nest_location and agent.has_item:
+            agent.has_item = 0
+            reward = self.rewards[next_position]
             
         agent.position = next_position
         return reward
