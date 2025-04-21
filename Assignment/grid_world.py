@@ -11,8 +11,10 @@ class QTableAgent:
         self.has_item = 0
         self.direction = None  # True for A->B, False for B->A
         self.position = None
+        self.previous_position = None  # Store previous position for collision detection
         self.local_mask = 0  # 8-bit mask for neighboring agents
         self.update_order = None  # Position in the update sequence
+        self.collision_penalty = 0  # Track collision penalties
 
     def choose_action(self, state): 
         # hook for the policy
@@ -49,6 +51,10 @@ class GridWorldEnvironment:
         self.clock = 0
         self.update_sequence = None
         self.set_update_sequence()  # Set initial update sequence
+        
+        # Collision tracking
+        self.collision_count = 0
+        self.collision_penalty = -20  # Penalty for head-on collision
      
     def set_update_sequence(self, sequence_type='round_robin'):
         """
@@ -113,10 +119,13 @@ class GridWorldEnvironment:
                 agent.direction = False  # B->A
             agent.has_item = 0
             agent.local_mask = 0
+            agent.previous_position = None
+            agent.collision_penalty = 0
         
         # Reset clock and update sequence
         self.clock = 0
         self.set_update_sequence()
+        self.collision_count = 0
 
     def get_state(self, agent_id):
         agent = self.agents[agent_id]
@@ -135,9 +144,50 @@ class GridWorldEnvironment:
                 return False
         return True
     
+    def check_collisions(self):
+        """Check for head-on collisions after all agents have moved"""
+        # Create a dictionary to track positions and agents
+        position_agents = {}
+        
+        # First pass: collect all agents at each position
+        for agent in self.agents:
+            if agent.position not in position_agents:
+                position_agents[agent.position] = []
+            position_agents[agent.position].append(agent)
+        
+        # Second pass: check for collisions
+        for position, agents in position_agents.items():
+            # Skip if only one agent at this position
+            if len(agents) < 2:
+                continue
+                
+            # Skip if position is A or B
+            if position == self.food_source_location or position == self.nest_location:
+                continue
+                
+            # Check if this is a head-on collision
+            has_a_to_b = False
+            has_b_to_a = False
+            
+            for agent in agents:
+                if agent.direction:  # A->B
+                    has_a_to_b = True
+                else:  # B->A
+                    has_b_to_a = True
+            
+            # If both directions are present, it's a head-on collision
+            if has_a_to_b and has_b_to_a:
+                self.collision_count += 1
+                # Apply penalty to all agents involved
+                for agent in agents:
+                    agent.collision_penalty += self.collision_penalty
+
     def take_action(self, agent_id, action):
         agent = self.agents[agent_id]
         row, col = agent.position
+
+        # Store previous position before moving
+        agent.previous_position = agent.position
 
         # Perform the chosen action and observe the next state and reward
         if action == 0:  # Up
@@ -228,7 +278,7 @@ class GridWorldEnvironment:
         self.ax.set_yticks([])
         
         # Add status information
-        title = f'Grid World - Step: {steps}/100 - Clock: {self.clock}\nTotal Reward: {total_reward}'
+        title = f'Grid World - Step: {steps}/100 - Clock: {self.clock}\nTotal Reward: {total_reward} - Collisions: {self.collision_count}'
         plt.title(title)
         
         plt.draw()
@@ -261,6 +311,10 @@ if __name__ == "__main__":
         reward_per_episode = 0
         
         while number_of_steps <= max_steps and not environment.check_done():
+            # Store previous positions before any moves
+            for agent in environment.agents:
+                agent.previous_position = agent.position
+            
             # Each agent takes its turn in sequence based on the clock
             for _ in range(environment.num_agents):
                 agent_id = environment.get_next_agent()
@@ -268,6 +322,14 @@ if __name__ == "__main__":
                 action = environment.agents[agent_id].choose_action(state)
                 reward = environment.take_action(agent_id, action)
                 reward_per_episode += reward
+            
+            # Check for collisions after all agents have moved
+            environment.check_collisions()
+            
+            # Add collision penalties to total reward
+            for agent in environment.agents:
+                reward_per_episode += agent.collision_penalty
+                agent.collision_penalty = 0  # Reset collision penalty
             
             # Visualize after all agents have moved
             environment.visualize(number_of_steps, reward_per_episode)
@@ -286,6 +348,7 @@ if __name__ == "__main__":
             
         reward_total.append(reward_per_episode)
         print(f"Episode {episode} finished with total reward: {reward_per_episode}")
+        print(f"Total collisions: {environment.collision_count}")
     
     plt.ioff()  # Turn off interactive mode
     plt.show()  # Keep the final visualization window open
