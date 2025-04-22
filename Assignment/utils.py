@@ -76,18 +76,17 @@ def train_one_step(states, actions, targets, gamma):
     return loss.item()
 
 class EpsilonScheduler:
-    """Linear epsilon decay scheduler"""
-    def __init__(self, start_eps=1.0, end_eps=0.01, decay_steps=10000):
-        self.start_eps = start_eps
-        self.end_eps = end_eps
-        self.decay_steps = decay_steps
-        self.steps = 0
+    def __init__(self, start_eps=1.0, min_eps=0.1, decay_factor=0.997):
+        self.start_eps = start_eps      # Starting epsilon (1.0)
+        self.min_eps = min_eps          # Minimum epsilon (0.1)
+        self.decay_factor = decay_factor # Decay factor (0.997)
+        self.current_eps = start_eps     # Current epsilon value
         
     def get_epsilon(self):
-        """Get current epsilon value"""
-        eps = self.start_eps - (self.start_eps - self.end_eps) * (self.steps / self.decay_steps)
-        self.steps += 1
-        return max(eps, self.end_eps)
+        # Get current epsilon and decay it for next time
+        current = self.current_eps
+        self.current_eps = max(self.min_eps, self.current_eps * self.decay_factor)
+        return current
 
 class MetricLogger:
     """Log and plot training metrics"""

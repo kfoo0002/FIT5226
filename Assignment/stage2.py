@@ -19,10 +19,10 @@ def main():
     grid_cols = 5
     num_actions = 4  # up, down, left, right
     num_agents = 4
-    gamma = 0.99
-    batch_size = 128
-    buffer_size = 50000
-    target_update = 1000
+    gamma = 0.997    # Learning rate (discount factor)
+    batch_size = 200 # Increased from 128
+    buffer_size = 1000 # Decreased from 50000
+    target_update = 500 # Update target network every 500 steps
     
     # Initialize environment
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -35,7 +35,7 @@ def main():
     replay_buffers = [ReplayBuffer(buffer_size) for _ in range(num_agents)]
     
     # Initialize epsilon scheduler and metric logger
-    epsilon_scheduler = EpsilonScheduler(start_eps=1.0, end_eps=0.01, decay_steps=10000)
+    epsilon_scheduler = EpsilonScheduler(start_eps=1.0, min_eps=0.1, decay_factor=0.997)
     metric_logger = MetricLogger()
     
     print("Starting training...")
