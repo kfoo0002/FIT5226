@@ -4,8 +4,9 @@ import time
 from time import process_time
 import matplotlib.pyplot as plt
 from env import GridWorldEnvironment
-from dqn import DQNAgent
-from utils import set_seed, EpsilonScheduler, MetricLogger
+from dqn import ReplayBuffer
+from utils import (set_seed, EpsilonScheduler, MetricLogger,
+                  prepare_torch, update_target, get_qvals, get_maxQ, train_one_step)
 
 def main():
     # Set random seed for reproducibility
@@ -18,25 +19,27 @@ def main():
     grid_cols = 5
     num_actions = 4  # up, down, left, right
     num_agents = 4
+    gamma = 0.99
+    batch_size = 128
+    buffer_size = 50000
+    target_update = 1000
     
-    # Initialize environment and agent
+    # Initialize environment
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     environment = GridWorldEnvironment(grid_rows, grid_cols, num_agents=num_agents)
     
-    # Initialize DQN agents for each agent in the environment
-    agents = []
-    for i in range(num_agents):
-        # State dimension: (row, col, direction, has_item, local_mask)
-        state_dim = 5
-        agent = DQNAgent(state_dim, num_actions, device)
-        agents.append(agent)
+    # Initialize networks and optimizer
+    prepare_torch()
+    
+    # Initialize replay buffers for each agent
+    replay_buffers = [ReplayBuffer(buffer_size) for _ in range(num_agents)]
     
     # Initialize epsilon scheduler and metric logger
     epsilon_scheduler = EpsilonScheduler(start_eps=1.0, end_eps=0.01, decay_steps=10000)
     metric_logger = MetricLogger()
     
     print("Starting training...")
-    plt.ion()  # Turn on interactive mode
+    plt.ion()
     
     for episode in range(num_episodes):
         environment._reset()
@@ -58,18 +61,38 @@ def main():
                 # Get epsilon for this step
                 epsilon = epsilon_scheduler.get_epsilon()
                 
-                # Select and take action
-                action = agents[agent_id].select_action(state, epsilon)
+                # Select action using epsilon-greedy policy
+                if np.random.random() < epsilon:
+                    action = np.random.randint(num_actions)
+                else:
+                    q_values = get_qvals(state)
+                    action = np.argmax(q_values)
+                
+                # Take action and observe reward
                 reward = environment.take_action(agent_id, action)
                 reward_per_episode += reward
                 
                 # Get next state and store experience
                 next_state = environment.get_state(agent_id)
                 done = environment.check_done()
-                agents[agent_id].memory.push(state, action, reward, next_state, done)
+                replay_buffers[agent_id].push(state, action, reward, next_state, done)
                 
-                # Update network
-                loss = agents[agent_id].update()
+                # Update network if enough experiences
+                if len(replay_buffers[agent_id]) >= batch_size:
+                    # Sample batch
+                    states, actions, rewards, next_states, dones = replay_buffers[agent_id].sample(batch_size)
+                    
+                    # Compute targets
+                    targets = []
+                    for i in range(batch_size):
+                        if dones[i]:
+                            targets.append(rewards[i])
+                        else:
+                            next_q = get_maxQ(next_states[i])
+                            targets.append(rewards[i] + gamma * next_q)
+                    
+                    # Train one step
+                    loss = train_one_step(states, actions, targets, gamma)
             
             # Check for collisions after all agents have moved
             environment.check_collisions()
@@ -82,6 +105,10 @@ def main():
             # Update metrics
             episode_collisions = environment.collision_count
             episode_deliveries = environment.delivery_count
+            
+            # Update target network periodically
+            if number_of_steps % target_update == 0:
+                update_target()
             
             # Visualize every 10 episodes
             if episode % 10 == 0:

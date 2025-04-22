@@ -133,11 +133,26 @@ class GridWorldEnvironment:
 
     def get_state(self, agent_id):
         agent = self.agents[agent_id]
-        # Update local mask before returning state
-        agent.local_mask = self.get_local_mask(agent_id)
-        return (agent.position[0], agent.position[1], 
-                agent.direction, agent.has_item,
-                agent.local_mask)  # Include local mask in state
+        # Get the 8-bit local mask for Moore neighbors
+        local_mask = self.get_local_mask(agent_id)
+        
+        # Convert local mask to 8 binary flags
+        neighbor_flags = [(local_mask >> i) & 1 for i in range(8)]
+        
+        # Construct the 15-dimensional state vector
+        state = [
+            agent.position[0],  # agent_row (0-4)
+            agent.position[1],  # agent_col (0-4)
+            self.food_source_location[0],  # A_row (pickup)
+            self.food_source_location[1],  # A_col
+            self.nest_location[0],  # B_row (drop-off)
+            self.nest_location[1],  # B_col
+            agent.has_item,  # carry_flag (0/1)
+        ]
+        # Add the 8 neighbor flags
+        state.extend(neighbor_flags)
+        
+        return state
 
     def check_done(self):
         # Check if all agents have completed their delivery missions
