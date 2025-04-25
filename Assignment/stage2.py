@@ -48,6 +48,9 @@ def main():
         episode_collisions = 0
         episode_deliveries = 0
         
+        # Get epsilon for this episode
+        epsilon = epsilon_scheduler.get_epsilon()
+        
         while number_of_steps <= max_steps and not environment.check_done():
             # Store previous positions before any moves
             for agent in environment.agents:
@@ -57,9 +60,6 @@ def main():
             for _ in range(environment.num_agents):
                 agent_id = environment.get_next_agent()
                 state = environment.get_state(agent_id)
-                
-                # Get epsilon for this step
-                epsilon = epsilon_scheduler.get_epsilon()
                 
                 # Select action using epsilon-greedy policy
                 if np.random.random() < epsilon:
