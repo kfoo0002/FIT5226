@@ -231,12 +231,12 @@ class GridWorldEnvironment:
         if next_position == self.food_source_location:
             agent.has_item = 1
             agent.direction = True  # Set direction to A->B
-            reward = self.rewards[next_position]
+            reward = 10  # Direct pickup reward
         # Check for automatic dropoff at B
         elif next_position == self.nest_location and agent.has_item:
             agent.has_item = 0
             agent.direction = False  # Set direction to B->A
-            reward = self.rewards[next_position]
+            reward = 50  # Direct dropoff reward
             self.delivery_count += 1  # Increment delivery count on successful dropoff
             
         agent.position = next_position
