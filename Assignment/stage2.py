@@ -93,7 +93,15 @@ def main():
                     
                     # Train one step
                     loss = train_one_step(states, actions, targets, gamma)
+                
+                number_of_steps += 1  # Increment after each agent's action
+                
+                if number_of_steps >= max_steps or environment.check_done():
+                    break
             
+            if number_of_steps >= max_steps or environment.check_done():
+                break
+                
             # Check for collisions after all agents have moved
             environment.check_collisions()
             
@@ -114,15 +122,6 @@ def main():
             if episode % 10 == 0:
                 environment.visualize(number_of_steps, reward_per_episode)
                 time.sleep(0.1)
-            
-            number_of_steps += 1
-            
-            if environment.check_done():
-                print(f"Success! All agents completed their tasks in {number_of_steps} steps!")
-                break
-            elif number_of_steps >= max_steps:
-                print(f"Failed to complete all tasks within {max_steps} steps.")
-                break
         
         # Log episode metrics
         metric_logger.log_episode(reward_per_episode, episode_collisions, 
