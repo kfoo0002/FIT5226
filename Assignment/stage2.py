@@ -19,13 +19,12 @@ def main():
     grid_cols = 5
     num_actions = 4  # up, down, left, right
     num_agents = 4
-    gamma = 0.997    # Learning rate (discount factor)
-    batch_size = 200 # Increased from 128
-    buffer_size = 1000 # Decreased from 50000
+    gamma = 0.997    # discount factor
+    batch_size = 200 
+    buffer_size = 1000 
     target_update = 500 # Update target network every 500 steps
     
     # Initialize environment
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     environment = GridWorldEnvironment(grid_rows, grid_cols, num_agents=num_agents)
     
     # Initialize networks and optimizer
@@ -101,14 +100,14 @@ def main():
             
             if number_of_steps >= max_steps or environment.check_done():
                 break
-                
-            # Check for collisions after all agents have moved
+            
+            # Check for collisions after all agents have moved in the cycle
             environment.check_collisions()
             
-            # Add collision penalties to total reward
-            for agent in environment.agents:
-                reward_per_episode += agent.collision_penalty
-                agent.collision_penalty = 0  # Reset collision penalty
+            # Add collision penalties to all agents involved
+            for agent_id in range(environment.num_agents):
+                reward_per_episode += environment.agents[agent_id].collision_penalty
+                environment.agents[agent_id].collision_penalty = 0  # Reset collision penalty
             
             # Update metrics
             episode_collisions = environment.collision_count
@@ -134,7 +133,7 @@ def main():
             print(f"Total collisions: {episode_collisions}")
             print(f"Total deliveries: {episode_deliveries}")
             print(f"Steps taken: {number_of_steps}")
-            print(f"Epsilon: {epsilon_scheduler.get_epsilon():.2f}")
+            print(f"Epsilon: {epsilon:.2f}")
             print("---")
     
     # Plot final metrics
