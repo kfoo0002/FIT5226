@@ -24,6 +24,12 @@ def main():
     buffer_size = 1000 
     target_update = 500 # Update target network every 500 steps
     
+    # Budgets
+    step_budget = 1_500_000
+    collision_budget = 4_000
+    walltime_budget = 600  # 10 minutes in seconds
+    success_threshold = 0.95  # 95% success rate
+    
     # Initialize environment
     environment = GridWorldEnvironment(grid_rows, grid_cols, num_agents=num_agents)
     
@@ -39,6 +45,11 @@ def main():
     
     print("Starting training...")
     plt.ion()
+    
+    # Track total steps and collisions
+    total_steps = 0
+    total_collisions = 0
+    start_time = time.time()
     
     for episode in range(num_episodes):
         environment._reset()
@@ -93,7 +104,8 @@ def main():
                     # Train one step
                     loss = train_one_step(states, actions, targets, gamma)
                 
-                number_of_steps += 1  # Increment after each agent's action
+                number_of_steps += 1
+                total_steps += 1
                 
                 if number_of_steps >= max_steps or environment.check_done():
                     break
@@ -103,6 +115,8 @@ def main():
             
             # Check for collisions after all agents have moved in the cycle
             environment.check_collisions()
+            total_collisions += environment.collision_count - episode_collisions
+            episode_collisions = environment.collision_count
             
             # Add collision penalties to all agents involved
             for agent_id in range(environment.num_agents):
@@ -110,7 +124,6 @@ def main():
                 environment.agents[agent_id].collision_penalty = 0  # Reset collision penalty
             
             # Update metrics
-            episode_collisions = environment.collision_count
             episode_deliveries = environment.delivery_count
             
             # Update target network periodically
@@ -134,7 +147,31 @@ def main():
             print(f"Total deliveries: {episode_deliveries}")
             print(f"Steps taken: {number_of_steps}")
             print(f"Epsilon: {epsilon:.2f}")
+            print(f"Total steps so far: {total_steps}")
+            print(f"Total collisions so far: {total_collisions}")
+            print(f"Walltime: {(time.time() - start_time):.2f} seconds")
             print("---")
+        
+        # Check early stopping conditions
+        if total_steps >= step_budget:
+            print(f"Stopping: Reached step budget of {step_budget}")
+            break
+            
+        if total_collisions >= collision_budget:
+            print(f"Stopping: Reached collision budget of {collision_budget}")
+            break
+            
+        if (time.time() - start_time) >= walltime_budget:
+            print(f"Stopping: Reached walltime budget of {walltime_budget} seconds")
+            break
+            
+        # Evaluate success rate every 10 episodes
+        if episode % 10 == 0:
+            success_rate = evaluate_success_rate(environment, num_agents)
+            print(f"Success rate: {success_rate:.2%}")
+            if success_rate >= success_threshold:
+                print(f"Stopping: Reached success threshold of {success_threshold:.2%}")
+                break
     
     # Plot final metrics
     plt.ioff()
@@ -147,6 +184,30 @@ def main():
     print(f"Mean collisions: {stats['mean_collisions']:.2f}")
     print(f"Mean deliveries: {stats['mean_deliveries']:.2f}")
     print(f"Mean episode length: {stats['mean_length']:.2f}")
+    print(f"Total steps: {total_steps}")
+    print(f"Total collisions: {total_collisions}")
+    print(f"Total walltime: {(time.time() - start_time):.2f} seconds")
+
+def evaluate_success_rate(environment, num_agents, eval_episodes=10):
+    """Evaluate the current policy's success rate"""
+    success_count = 0
+    
+    for _ in range(eval_episodes):
+        environment._reset()
+        steps = 0
+        while steps < 100 and not environment.check_done():
+            for _ in range(num_agents):
+                agent_id = environment.get_next_agent()
+                state = environment.get_state(agent_id)
+                q_values = get_qvals(state)
+                action = np.argmax(q_values)
+                environment.take_action(agent_id, action)
+            steps += 1
+            if environment.check_done():
+                success_count += 1
+                break
+    
+    return success_count / eval_episodes
 
 if __name__ == "__main__":
     t = process_time()
