@@ -136,6 +136,7 @@ class GridWorldEnvironment:
         agent = self.agents[agent_id]
         # Get the 8-bit local mask for Moore neighbors
         local_mask = self.get_local_mask(agent_id)
+        agent.local_mask = local_mask  # Store the mask back to the agent
         
         # Convert local mask to 8 binary flags
         neighbor_flags = [(local_mask >> i) & 1 for i in range(8)]
