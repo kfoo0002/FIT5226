@@ -14,10 +14,11 @@ class QTableAgent:
         self.local_mask = 0  # 8-bit mask for neighboring agents
         self.update_order = None  # Position in the update sequence
         self.collision_penalty = 0  # Track collision penalties
+        self.num_actions = 4  # Number of possible actions (up, down, left, right)
 
     def choose_action(self, state): 
         # hook for the policy
-        return np.random.randint(num_actions)
+        return np.random.randint(self.num_actions)
 
 # Define the grid world environment
 class GridWorldEnvironment:

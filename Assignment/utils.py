@@ -65,9 +65,9 @@ def get_maxQ(s):
 def train_one_step(states, actions, targets, gamma):
     """Perform one training step"""
     state1_batch = torch.cat([torch.from_numpy(s).float() for s in states])
-    action_batch = torch.Tensor(actions)
+    action_batch = torch.Tensor(actions).long().unsqueeze(1)  # Reshape to [batch_size, 1]
     Q1 = model(state1_batch)
-    X = Q1.gather(dim=1,index=action_batch.long().unsqueeze(dim=1)).squeeze()
+    X = Q1.gather(dim=1, index=action_batch).squeeze()  # Now properly shaped for gather
     Y = torch.tensor(targets)
     loss = loss_fn(X, Y)
     optimizer.zero_grad()
