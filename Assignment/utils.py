@@ -60,19 +60,31 @@ def get_qvals(state):
 
 def get_maxQ(s):
     """Get maximum Q-value for a state using target network"""
-    return torch.max(model2(torch.from_numpy(s).float())).float()
+    return torch.max(model2(torch.from_numpy(s).float())).float().item()
 
 def train_one_step(states, actions, targets, gamma):
     """Perform one training step"""
-    state1_batch = torch.cat([torch.from_numpy(s).float() for s in states])
-    action_batch = torch.Tensor(actions).long().unsqueeze(1)  # Reshape to [batch_size, 1]
+    # Convert states to tensor batch with proper shape [batch_size, state_dim]
+    state1_batch = torch.cat([torch.from_numpy(s).float().unsqueeze(0) for s in states], dim=0)
+    
+    # Convert actions to tensor with proper shape [batch_size, 1]
+    action_batch = torch.tensor(actions, dtype=torch.long).unsqueeze(1)
+    
+    # Get Q-values from policy network
     Q1 = model(state1_batch)
-    X = Q1.gather(dim=1, index=action_batch).squeeze()  # Now properly shaped for gather
-    Y = torch.tensor(targets)
+    
+    # Gather Q-values for chosen actions and squeeze to [batch_size]
+    X = Q1.gather(dim=1, index=action_batch).squeeze()
+    
+    # Convert targets to tensor with same shape as X [batch_size]
+    Y = torch.tensor(targets, dtype=torch.float32)
+    
+    # Compute loss and update
     loss = loss_fn(X, Y)
     optimizer.zero_grad()
     loss.backward()
     optimizer.step()
+    
     return loss.item()
 
 class EpsilonScheduler:
