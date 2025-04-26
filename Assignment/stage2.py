@@ -31,6 +31,9 @@ def main():
     walltime_budget = 600  # 10 minutes in seconds
     success_threshold = 0.95  # 95% success rate
     
+    # Track success rates
+    success_rates = []
+    
     # Initialize environment
     environment = GridWorldEnvironment(grid_rows, grid_cols, num_agents=num_agents)
     
@@ -169,6 +172,7 @@ def main():
         # Evaluation for episodes >= 50
         if episode >= 50:
             success_rate = evaluate_success_rate(environment, num_agents)
+            success_rates.append(success_rate)
             print(f"Success rate: {success_rate:.2%}")
             if success_rate >= success_threshold:
                 print(f"Stopping: Reached success threshold of {success_threshold:.2%}")
@@ -188,6 +192,10 @@ def main():
     print(f"Total steps: {total_steps}")
     print(f"Total collisions: {total_collisions}")
     print(f"Total walltime: {(time.time() - start_time):.2f} seconds")
+    # Calculate and print average success rate
+    avg_success_rate = sum(success_rates) / len(success_rates)
+    print(f"Average success rate: {avg_success_rate:.2%}")
+    print(f"Number of evaluations: {len(success_rates)}")
 
 def evaluate_success_rate(environment, num_agents, eval_episodes=50):
     """Evaluate the current policy's success rate based on round trips using a rolling window"""
