@@ -166,23 +166,13 @@ def main():
             print(f"Stopping: Reached walltime budget of {walltime_budget} seconds")
             break
             
-        # Progress tracking and evaluation
-        if episode % 10 == 0:
-            if episode >= 50:
-                # Full evaluation with 50 episodes
-                success_rate = evaluate_success_rate(environment, num_agents)
-                print(f"Success rate: {success_rate:.2%}")
-                if success_rate >= success_threshold:
-                    print(f"Stopping: Reached success threshold of {success_threshold:.2%}")
-                    break
-            else:
-                # Progress feedback during early training
-                print(f"Training progress: {episode} episodes completed")
-                print(f"Total steps: {total_steps}")
-                print(f"Total collisions: {total_collisions}")
-                print(f"Total deliveries: {episode_deliveries}")
-                print(f"Walltime: {(time.time() - start_time):.2f} seconds")
-                print("---")
+        # Evaluation for episodes >= 50
+        if episode >= 50:
+            success_rate = evaluate_success_rate(environment, num_agents)
+            print(f"Success rate: {success_rate:.2%}")
+            if success_rate >= success_threshold:
+                print(f"Stopping: Reached success threshold of {success_threshold:.2%}")
+                break
     
     # Plot final metrics
     plt.ioff()
