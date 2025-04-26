@@ -196,6 +196,14 @@ def main():
     avg_success_rate = sum(success_rates) / len(success_rates)
     print(f"Average success rate: {avg_success_rate:.2%}")
     print(f"Number of evaluations: {len(success_rates)}")
+    
+    # Evaluate performance points
+    if avg_success_rate > 0.95 and total_collisions < 500:
+        print("2 performance points!")
+    elif avg_success_rate > 0.85 and total_collisions < 1000:
+        print("1 performance point!")
+    else:
+        print("No performance points earned.")
 
 def evaluate_success_rate(environment, num_agents, eval_episodes=50):
     """Evaluate the current policy's success rate based on round trips using a rolling window"""
