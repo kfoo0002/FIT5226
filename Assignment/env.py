@@ -15,6 +15,7 @@ class QTableAgent:
         self.update_order = None  # Position in the update sequence
         self.collision_penalty = 0  # Track collision penalties
         self.num_actions = 4  # Number of possible actions (up, down, left, right)
+        self.completed_round_trip = False  # Track if agent has completed their round trip
 
     def choose_action(self, state): 
         # hook for the policy
@@ -125,6 +126,7 @@ class GridWorldEnvironment:
             agent.local_mask = 0
             agent.previous_position = None
             agent.collision_penalty = 0
+            agent.completed_round_trip = False  # Reset round trip completion
         
         # Reset clock and update sequence
         self.clock = 0
@@ -157,15 +159,9 @@ class GridWorldEnvironment:
         return state
 
     def check_done(self):
-        # Check if all agents have completed their delivery missions
+        # Check if all agents have completed their round trips
         for agent in self.agents:
-            # Mission is complete if agent is at B without an item (has delivered)
-            if agent.position == self.nest_location and not agent.has_item:
-                continue
-            # Mission is not complete if agent is at A with an item (just picked up)
-            # or if agent is carrying an item but not at B
-            if (agent.position == self.food_source_location and agent.has_item) or \
-               (agent.has_item and agent.position != self.nest_location):
+            if not agent.completed_round_trip:
                 return False
         return True
     
@@ -238,6 +234,14 @@ class GridWorldEnvironment:
             agent.direction = False  # Set direction to B->A
             reward = 50  # Direct dropoff reward
             self.delivery_count += 1  # Increment delivery count on successful dropoff
+            
+            # Check for round trip completion
+            if agent.direction == True:  # A->B direction
+                if agent.position == self.food_source_location and not agent.has_item:
+                    agent.completed_round_trip = True  # Completed A->B->A
+            else:  # B->A direction
+                if agent.position == self.nest_location and not agent.has_item:
+                    agent.completed_round_trip = True  # Completed B->A->B
             
         agent.position = next_position
         return reward
