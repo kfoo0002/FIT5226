@@ -7,6 +7,7 @@ from env import GridWorldEnvironment
 from dqn import ReplayBuffer
 from utils import (set_seed, EpsilonScheduler, MetricLogger,
                   prepare_torch, update_target, get_qvals, get_maxQ, train_one_step)
+from collections import deque
 
 def main():
     # Set random seed for reproducibility
@@ -165,13 +166,23 @@ def main():
             print(f"Stopping: Reached walltime budget of {walltime_budget} seconds")
             break
             
-        # Evaluate success rate every 10 episodes
+        # Progress tracking and evaluation
         if episode % 10 == 0:
-            success_rate = evaluate_success_rate(environment, num_agents)
-            print(f"Success rate: {success_rate:.2%}")
-            if success_rate >= success_threshold:
-                print(f"Stopping: Reached success threshold of {success_threshold:.2%}")
-                break
+            if episode >= 50:
+                # Full evaluation with 50 episodes
+                success_rate = evaluate_success_rate(environment, num_agents)
+                print(f"Success rate: {success_rate:.2%}")
+                if success_rate >= success_threshold:
+                    print(f"Stopping: Reached success threshold of {success_threshold:.2%}")
+                    break
+            else:
+                # Progress feedback during early training
+                print(f"Training progress: {episode} episodes completed")
+                print(f"Total steps: {total_steps}")
+                print(f"Total collisions: {total_collisions}")
+                print(f"Total deliveries: {episode_deliveries}")
+                print(f"Walltime: {(time.time() - start_time):.2f} seconds")
+                print("---")
     
     # Plot final metrics
     plt.ioff()
@@ -188,9 +199,10 @@ def main():
     print(f"Total collisions: {total_collisions}")
     print(f"Total walltime: {(time.time() - start_time):.2f} seconds")
 
-def evaluate_success_rate(environment, num_agents, eval_episodes=10):
-    """Evaluate the current policy's success rate based on round trips"""
-    success_count = 0
+def evaluate_success_rate(environment, num_agents, eval_episodes=50):
+    """Evaluate the current policy's success rate based on round trips using a rolling window"""
+    # Track success/failure for the last 50 episodes
+    success_history = deque(maxlen=eval_episodes)
     
     for _ in range(eval_episodes):
         environment._reset()
@@ -201,6 +213,7 @@ def evaluate_success_rate(environment, num_agents, eval_episodes=10):
         # For A→B→A: 0: at A(no item), 1: going to B(with item), 2: at B(no item), 3: going back to A(no item)
         # For B→A→B: 0: at B(no item), 1: going to A(no item), 2: at A(with item), 3: going back to B(with item)
         agent_states = [0] * num_agents
+        agent_round_trips = [False] * num_agents  # Track if each agent completed a round trip
         
         while steps < 20 and not success:  # Max 20 steps per evaluation
             # Reset collision count for this step
@@ -225,6 +238,7 @@ def evaluate_success_rate(environment, num_agents, eval_episodes=10):
                     agent_states[agent_id] = 2  # Dropped off at B
                 elif agent_states[agent_id] == 2 and current_pos == environment.food_source_location and not agent.has_item:
                     agent_states[agent_id] = 3  # Completed A→B→A round trip
+                    agent_round_trips[agent_id] = True
                     success = True
                 
                 # Check for B→A→B round trip
@@ -234,6 +248,7 @@ def evaluate_success_rate(environment, num_agents, eval_episodes=10):
                     agent_states[agent_id] = 2  # Picked up at A, going back to B
                 elif agent_states[agent_id] == 2 and current_pos == environment.nest_location and not agent.has_item:
                     agent_states[agent_id] = 3  # Completed B→A→B round trip
+                    agent_round_trips[agent_id] = True
                     success = True
             
             # Check for collisions after all agents move
@@ -243,10 +258,13 @@ def evaluate_success_rate(environment, num_agents, eval_episodes=10):
             
             steps += 1
         
-        if success and steps < 20 and environment.collision_count == 0:
-            success_count += 1
+        # Record success/failure for this episode
+        episode_success = success and steps < 20 and environment.collision_count == 0
+        success_history.append(episode_success)
     
-    return success_count / eval_episodes
+    # Calculate rolling success rate
+    rolling_success_rate = sum(success_history) / len(success_history)
+    return rolling_success_rate
 
 if __name__ == "__main__":
     t = process_time()
