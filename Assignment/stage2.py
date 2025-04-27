@@ -15,7 +15,7 @@ def main():
     
     # Hyperparameters
     num_episodes = 1000
-    max_steps = 100
+    max_steps = 200
     grid_rows = 5
     grid_cols = 5
     num_actions = 4  # up, down, left, right
@@ -213,6 +213,12 @@ def evaluate_success_rate(environment, num_agents, eval_episodes=50):
         steps = 0
         success = False
         
+        # Track round trip progress for each agent
+        # For A→B→A: 0: at A(no item), 1: going to B(with item), 2: at B(no item), 3: going back to A(no item)
+        # For B→A→B: 0: at B(no item), 1: going to A(no item), 2: at A(with item), 3: going back to B(with item)
+        agent_states = [0] * num_agents
+        agent_round_trips = [False] * num_agents  # Track if each agent completed a round trip
+        
         while steps < 20 and not success:  # Max 20 steps per evaluation
             # Reset collision count for this step
             environment.collision_count = 0
@@ -224,16 +230,35 @@ def evaluate_success_rate(environment, num_agents, eval_episodes=50):
                 q_values = get_qvals(state)
                 action = np.argmax(q_values)  # Greedy action
                 environment.take_action(agent_id, action)
+                
+                # Update agent's round trip state
+                agent = environment.agents[agent_id]
+                current_pos = agent.position
+                
+                # Check for A→B→A round trip
+                if agent_states[agent_id] == 0 and current_pos == environment.food_source_location and agent.has_item:
+                    agent_states[agent_id] = 1  # Picked up item at A, going to B
+                elif agent_states[agent_id] == 1 and current_pos == environment.nest_location and not agent.has_item:
+                    agent_states[agent_id] = 2  # Dropped off at B
+                elif agent_states[agent_id] == 2 and current_pos == environment.food_source_location and not agent.has_item:
+                    agent_states[agent_id] = 3  # Completed A→B→A round trip
+                    agent_round_trips[agent_id] = True
+                    success = True
+                
+                # Check for B→A→B round trip
+                elif agent_states[agent_id] == 0 and current_pos == environment.nest_location and not agent.has_item:
+                    agent_states[agent_id] = 1  # Going to A without item
+                elif agent_states[agent_id] == 1 and current_pos == environment.food_source_location and agent.has_item:
+                    agent_states[agent_id] = 2  # Picked up at A, going back to B
+                elif agent_states[agent_id] == 2 and current_pos == environment.nest_location and not agent.has_item:
+                    agent_states[agent_id] = 3  # Completed B→A→B round trip
+                    agent_round_trips[agent_id] = True
+                    success = True
             
             # Check for collisions after all agents move
             environment.check_collisions()
             if environment.collision_count > 0:
-                break  # Failed if any collisions, move to next episode
-            
-            # Check if all agents completed their round trips
-            if environment.check_done():
-                success = True
-                break
+                break  # Failed if any collisions
             
             steps += 1
         
