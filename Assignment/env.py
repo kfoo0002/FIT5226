@@ -57,8 +57,8 @@ class GridWorldEnvironment:
         self.collision_count = 0
         self.collision_penalty = -20  # Penalty for head-on collision
         
-        # Delivery tracking
-        self.delivery_count = 0  # Track number of successful deliveries
+        # Round trip tracking
+        self.round_trip_count = 0  # Track number of completed round trips
 
     def set_update_sequence(self, sequence_type='round_robin'):
         """
@@ -132,7 +132,7 @@ class GridWorldEnvironment:
         self.clock = 0
         self.set_update_sequence()
         self.collision_count = 0
-        self.delivery_count = 0  # Reset delivery count
+        self.round_trip_count = 0  # Reset round trip count
 
     def get_state(self, agent_id):
         agent = self.agents[agent_id]
@@ -233,15 +233,16 @@ class GridWorldEnvironment:
             agent.has_item = 0
             agent.direction = False  # Set direction to B->A
             reward = 50  # Direct dropoff reward
-            self.delivery_count += 1  # Increment delivery count on successful dropoff
             
             # Check for round trip completion
             if agent.direction == True:  # A->B direction
                 if agent.position == self.food_source_location and not agent.has_item:
                     agent.completed_round_trip = True  # Completed A->B->A
+                    self.round_trip_count += 1  # Increment round trip count
             else:  # B->A direction
                 if agent.position == self.nest_location and not agent.has_item:
                     agent.completed_round_trip = True  # Completed B->A->B
+                    self.round_trip_count += 1  # Increment round trip count
             
         agent.position = next_position
         return reward
@@ -303,7 +304,7 @@ class GridWorldEnvironment:
         self.ax.set_yticks([])
         
         # Add status information
-        title = f'Grid World - Step: {steps}/100 - Clock: {self.clock}\nTotal Reward: {total_reward} - Collisions: {self.collision_count} - Deliveries: {self.delivery_count}'
+        title = f'Grid World - Step: {steps}/100 - Clock: {self.clock}\nTotal Reward: {total_reward} - Collisions: {self.collision_count} - Round Trips: {self.round_trip_count}'
         plt.title(title)
         
         plt.draw()

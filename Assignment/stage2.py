@@ -55,17 +55,17 @@ def main():
     total_collisions = 0
     start_time = time.time()
     
-    for episode in range(num_episodes):
+    for episode in range(1, num_episodes + 1):  # Start from 1 to num_episodes
         environment._reset()
         number_of_steps = 0
         reward_per_episode = 0
         episode_collisions = 0
-        episode_deliveries = 0
+        episode_round_trips = 0
         
         # Get epsilon for this episode
         epsilon = epsilon_scheduler.get_epsilon()
         
-        while number_of_steps <= max_steps and not environment.check_done():
+        while number_of_steps < max_steps and not environment.check_done():
             # Store previous positions before any moves
             for agent in environment.agents:
                 agent.previous_position = agent.position
@@ -126,7 +126,7 @@ def main():
                 environment.agents[agent_id].collision_penalty = 0  # Reset collision penalty
             
             # Update metrics
-            episode_deliveries = environment.delivery_count
+            episode_round_trips = environment.round_trip_count
             
             # Update target network periodically
             if number_of_steps % target_update == 0:
@@ -139,19 +139,28 @@ def main():
         
         # Log episode metrics
         metric_logger.log_episode(reward_per_episode, episode_collisions, 
-                                episode_deliveries, number_of_steps)
+                                episode_round_trips, number_of_steps)
         
-        # Print progress
+        # Print progress and evaluate
         if episode % 10 == 0:
             print(f"Episode {episode}")
             print(f"Total reward: {reward_per_episode}")
             print(f"Total collisions: {episode_collisions}")
-            print(f"Total deliveries: {episode_deliveries}")
+            print(f"Total round trips: {episode_round_trips}")
             print(f"Steps taken: {number_of_steps}")
             print(f"Epsilon: {epsilon:.2f}")
             print(f"Total steps so far: {total_steps}")
             print(f"Total collisions so far: {total_collisions}")
             print(f"Walltime: {(time.time() - start_time):.2f} seconds")
+            
+            # Evaluation for episodes >= 50
+            if episode >= 50:
+                success_rate = evaluate_success_rate(environment, num_agents)
+                success_rates.append(success_rate)
+                print(f"Success rate: {success_rate:.2%}")
+                if success_rate >= success_threshold:
+                    print(f"Stopping: Reached success threshold of {success_threshold:.2%}")
+                    break
             print("---")
         
         # Check early stopping conditions
@@ -166,15 +175,6 @@ def main():
         if (time.time() - start_time) >= walltime_budget:
             print(f"Stopping: Reached walltime budget of {walltime_budget} seconds")
             break
-            
-        # Evaluation for episodes >= 50
-        if episode >= 50:
-            success_rate = evaluate_success_rate(environment, num_agents)
-            success_rates.append(success_rate)
-            print(f"Success rate: {success_rate:.2%}")
-            if success_rate >= success_threshold:
-                print(f"Stopping: Reached success threshold of {success_threshold:.2%}")
-                break
     
     # Plot final metrics
     plt.ioff()
@@ -185,7 +185,7 @@ def main():
     print("\nFinal Statistics:")
     print(f"Mean reward: {stats['mean_reward']:.2f}")
     print(f"Mean collisions: {stats['mean_collisions']:.2f}")
-    print(f"Mean deliveries: {stats['mean_deliveries']:.2f}")
+    print(f"Mean round trips: {stats['mean_round_trips']:.2f}")
     print(f"Mean episode length: {stats['mean_length']:.2f}")
     print(f"Total steps: {total_steps}")
     print(f"Total collisions: {total_collisions}")
