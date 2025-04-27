@@ -158,9 +158,9 @@ def main():
                 success_rate = evaluate_success_rate(environment, num_agents)
                 success_rates.append(success_rate)
                 print(f"Success rate: {success_rate:.2%}")
-                if success_rate >= success_threshold:
-                    print(f"Stopping: Reached success threshold of {success_threshold:.2%}")
-                    break
+                # Count evaluations above threshold
+                above_threshold = sum(1 for rate in success_rates if rate >= success_threshold)
+                print(f"Evaluations above {success_threshold:.2%} threshold: {above_threshold}/{len(success_rates)}")
             print("---")
         
         # Check early stopping conditions
