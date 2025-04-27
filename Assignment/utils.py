@@ -105,14 +105,14 @@ class MetricLogger:
     def __init__(self):
         self.rewards = []
         self.collisions = []
-        self.deliveries = []
+        self.round_trips = []
         self.episode_lengths = []
         
-    def log_episode(self, reward, collisions, deliveries, length):
+    def log_episode(self, reward, collisions, round_trips, length):
         """Log metrics for an episode"""
         self.rewards.append(reward)
         self.collisions.append(collisions)
-        self.deliveries.append(deliveries)
+        self.round_trips.append(round_trips)
         self.episode_lengths.append(length)
         
     def plot_metrics(self):
@@ -128,8 +128,8 @@ class MetricLogger:
         plt.title('Collisions per Episode')
         
         plt.subplot(2, 2, 3)
-        plt.plot(self.deliveries)
-        plt.title('Deliveries per Episode')
+        plt.plot(self.round_trips)
+        plt.title('Round Trips per Episode')
         
         plt.subplot(2, 2, 4)
         plt.plot(self.episode_lengths)
@@ -143,6 +143,6 @@ class MetricLogger:
         return {
             'mean_reward': np.mean(self.rewards),
             'mean_collisions': np.mean(self.collisions),
-            'mean_deliveries': np.mean(self.deliveries),
+            'mean_round_trips': np.mean(self.round_trips),
             'mean_length': np.mean(self.episode_lengths)
         } 
