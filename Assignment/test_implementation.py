@@ -24,7 +24,7 @@ def test_environment():
         print(f"\nStep {step + 1}:")
         for i in range(env.num_agents):
             agent_id = env.get_next_agent()
-            state = env.get_state(agent_id)
+            state = np.array(env.get_state(agent_id))  # Convert to numpy array
             action = np.random.randint(4)
             reward = env.take_action(agent_id, action)
             print(f"Agent {agent_id}:")

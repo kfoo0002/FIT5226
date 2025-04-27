@@ -221,7 +221,7 @@ class GridWorldEnvironment:
             next_position = (row, min(col + 1, self.m - 1))
        
         # Update agent's state and calculate reward
-        reward = -1  # Default step penalty
+        reward = -1  # Default step penalty for any attempted move
         
         # Check for automatic pickup at A
         if next_position == self.food_source_location:
