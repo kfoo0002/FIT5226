@@ -234,15 +234,17 @@ class GridWorldEnvironment:
             agent.direction = False  # Set direction to B->A
             reward = 50  # Direct dropoff reward
             
-            # Check for round trip completion
-            if agent.direction == True:  # A->B direction
-                if agent.position == self.food_source_location and not agent.has_item:
-                    agent.completed_round_trip = True  # Completed A->B->A
-                    self.round_trip_count += 1  # Increment round trip count
-            else:  # B->A direction
-                if agent.position == self.nest_location and not agent.has_item:
-                    agent.completed_round_trip = True  # Completed B->A->B
-                    self.round_trip_count += 1  # Increment round trip count
+        # Check for round trip completion
+        if agent.direction == True:  # A->B direction
+            # A->B round trip: Start at A with item, go to B to drop off, return to A without item
+            if next_position == self.food_source_location and not agent.has_item:
+                agent.completed_round_trip = True  # Completed A->B->A
+                self.round_trip_count += 1  # Increment round trip count
+        else:  # B->A direction
+            # B->A round trip: Start at B without item, go to A to pick up, return to B to drop off
+            if next_position == self.nest_location and not agent.has_item:
+                agent.completed_round_trip = True  # Completed B->A->B
+                self.round_trip_count += 1  # Increment round trip count
             
         agent.position = next_position
         return reward

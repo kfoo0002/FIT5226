@@ -44,8 +44,7 @@ def main():
     epsilon_scheduler = EpsilonScheduler(start_eps=1.0, min_eps=0.1, decay_factor=0.997)
     metric_logger = MetricLogger()
     
-    print("Starting training...")
-    plt.ion()
+    # plt.ion()  # Commented out to disable visualization during training
     
     # Track total steps and collisions
     total_steps = 0
@@ -53,7 +52,18 @@ def main():
     start_time = time.time()
     
     for episode in range(1, num_episodes + 1):
+        # Generate random positions for A and B
+        while True:
+            a_pos = (np.random.randint(grid_rows), np.random.randint(grid_cols))
+            b_pos = (np.random.randint(grid_rows), np.random.randint(grid_cols))
+            if a_pos != b_pos:  # Ensure A and B are at different positions
+                break
+        
+        # Update environment positions instead of creating new instance
+        environment.food_source_location = a_pos
+        environment.nest_location = b_pos
         environment._reset()
+        
         number_of_steps = 0
         reward_per_episode = 0
         episode_collisions = 0
@@ -83,6 +93,19 @@ def main():
                 reward = environment.take_action(agent_id, action)
                 reward_per_episode += reward
                 
+                # Check for collisions after this agent's move
+                environment.check_collisions()
+                if environment.collision_count > 0:
+                    # Add collision penalties to all agents involved
+                    for a_id in range(environment.num_agents):
+                        if environment.agents[a_id].collision_penalty != 0:
+                            reward_per_episode += environment.agents[a_id].collision_penalty
+                            environment.agents[a_id].collision_penalty = 0  # Reset collision penalty
+                    
+                    # Update collision counts
+                    total_collisions += environment.collision_count - episode_collisions
+                    episode_collisions = environment.collision_count
+                
                 # Get next state and store experience
                 next_state = environment.get_state(agent_id)
                 done = environment.check_done()
@@ -111,27 +134,12 @@ def main():
                 if number_of_steps >= max_steps or environment.check_done():
                     break
             
-            # Check for collisions after all agents have moved in the cycle
-            environment.check_collisions()
-            total_collisions += environment.collision_count - episode_collisions
-            episode_collisions = environment.collision_count
-            
-            # Add collision penalties to all agents involved
-            for agent_id in range(environment.num_agents):
-                reward_per_episode += environment.agents[agent_id].collision_penalty
-                environment.agents[agent_id].collision_penalty = 0  # Reset collision penalty
-            
             # Update metrics
             episode_round_trips = environment.round_trip_count
             
-            # Update target network periodically
-            if number_of_steps % target_update == 0:
+            # Update target network less frequently
+            if number_of_steps % (target_update * 2) == 0:  # Update every 1000 steps instead of 500
                 update_target()
-            
-            # Visualize every 10 episodes
-            if episode % 10 == 0:
-                environment.visualize(number_of_steps, reward_per_episode)
-                time.sleep(0.1)
         
         # Log episode metrics
         metric_logger.log_episode(reward_per_episode, episode_collisions, 
@@ -331,52 +339,70 @@ def test_single_configuration(env, b_agents, a_agents, max_steps):
         env.agents[i].position = env.food_source_location
         env.agents[i].has_item = False
     
-    # Track B→A→B progress
+    # Track progress for all agents
     # 0: at B(no item), 1: going to A(no item), 2: at A(with item), 3: going back to B(with item)
-    agent_state = 0
+    agent_states = [0] * env.num_agents  # Track state for each agent
+    agent_collisions = [False] * env.num_agents  # Track if each agent was involved in a collision
     steps = 0
     done = False
     success = False
+    successful_agent = None  # Track which agent succeeded
     
     while not done and steps < max_steps:
-        # Get state and select action (no exploration, pure exploitation)
-        state = env.get_state(0)  # Test first agent
-        state = np.array(state)  # Convert state to numpy array
-        q_values = get_qvals(state)
-        action = np.argmax(q_values)
-        
-        # Take action
-        reward = env.take_action(0, action)
-        
-        # Check for collisions
-        env.check_collisions()
-        if env.collision_count > 0:
-            return False, steps
-        
-        # Update agent's progress state
-        agent = env.agents[0]
-        current_pos = agent.position
-        
-        # Update B→A→B state
-        if agent_state == 0 and current_pos == env.food_source_location and not agent.has_item:
-            agent_state = 1  # Reached A without item
-        elif agent_state == 1 and current_pos == env.food_source_location and agent.has_item:
-            agent_state = 2  # Picked up item at A
-        elif agent_state == 2 and current_pos == env.nest_location and not agent.has_item:
-            agent_state = 3  # Completed B→A→B
-            success = True
-            done = True
+        # Each agent takes their turn
+        for agent_id in range(env.num_agents):
+            # Get state and select action (no exploration, pure exploitation)
+            state = env.get_state(agent_id)
+            state = np.array(state)  # Convert state to numpy array
+            q_values = get_qvals(state)
+            action = np.argmax(q_values)
+            
+            # Take action
+            reward = env.take_action(agent_id, action)
+            
+            # Check for collisions after this agent's move
+            env.check_collisions()
+            if env.collision_count > 0:
+                # Find which agents were involved in collisions
+                for a_id in range(env.num_agents):
+                    if env.agents[a_id].collision_penalty != 0:
+                        agent_collisions[a_id] = True
+            
+            # Update agent's progress state
+            agent = env.agents[agent_id]
+            current_pos = agent.position
+            
+            # Update B→A→B state for this agent
+            if agent_states[agent_id] == 0 and current_pos == env.food_source_location and not agent.has_item:
+                agent_states[agent_id] = 1  # Reached A without item
+            elif agent_states[agent_id] == 1 and current_pos == env.food_source_location and agent.has_item:
+                agent_states[agent_id] = 2  # Picked up item at A
+            elif agent_states[agent_id] == 2 and current_pos == env.nest_location and not agent.has_item:
+                agent_states[agent_id] = 3  # Completed B→A→B
+                successful_agent = agent_id
+                done = True
+                break  # Exit the agent loop if any agent succeeds
         
         steps += 1
+    
+    # Test is successful if:
+    # 1. An agent completed their round trip
+    # 2. That agent wasn't involved in any collisions
+    if successful_agent is not None and not agent_collisions[successful_agent]:
+        success = True
     
     return success, steps
 
 if __name__ == "__main__":
     t = process_time()
     
-    # Uncomment the following lines to train a new model
-    # print("\nStarting training...")
-    # trained_model = main()  # Store the returned model
+    # Run training only
+    '''
+    print("\nStarting training...")
+    trained_model = main()  # Store the returned model
+    '''
+    
+    # Commented out evaluation code for later use
     
     print("\nLoading trained model...")
     # Load the trained model for evaluation
@@ -400,6 +426,7 @@ if __name__ == "__main__":
     print(f"Collisions: {eval_stats['failures']['collisions']}")
     print(f"Timeouts: {eval_stats['failures']['timeout']}")
     print(f"Incomplete paths: {eval_stats['failures']['incomplete']}")
+    
     
     elapsed_time = process_time() - t
     print(f"\nFinished in {elapsed_time:.2f} seconds.") 
