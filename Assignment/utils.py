@@ -33,18 +33,21 @@ def prepare_torch():
     l2 = 24
     l3 = 24
     l4 = 4
+    # Create the policy network
     model = torch.nn.Sequential(
         torch.nn.Linear(l1, l2),
         torch.nn.ReLU(),
         torch.nn.Linear(l2, l3),
         torch.nn.ReLU(),
         torch.nn.Linear(l3,l4))
+    # Create the target network
     model2 = copy.deepcopy(model)
     model2.load_state_dict(model.state_dict())
+    # Initialize optimizer and loss function
     loss_fn = torch.nn.MSELoss()
     learning_rate = 1e-3
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
-    return model2
+    return model  # Return the policy network
 
 def update_target():
     """Copy weights from policy network to target network"""
@@ -53,17 +56,20 @@ def update_target():
 
 def get_qvals(state):
     """Get Q-values for a state using policy network"""
+    global model
     state1 = torch.from_numpy(state).float()
-    qvals_torch = model(state1)
-    qvals = qvals_torch.data.numpy()
+    qvals = model(state1).detach().numpy()
     return qvals
 
 def get_maxQ(s):
     """Get maximum Q-value for a state using target network"""
+    global model2
     return torch.max(model2(torch.from_numpy(s).float())).float().item()
 
 def train_one_step(states, actions, targets, gamma):
     """Perform one training step"""
+    global model, optimizer, loss_fn
+    
     # Convert states to tensor batch with proper shape [batch_size, state_dim]
     state1_batch = torch.cat([torch.from_numpy(s).float().unsqueeze(0) for s in states], dim=0)
     

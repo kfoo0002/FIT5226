@@ -23,13 +23,13 @@ class QTableAgent:
 
 # Define the grid world environment
 class GridWorldEnvironment:
-    def __init__(self, n, m, num_agents=4):
+    def __init__(self, n, m, num_agents=4, food_source_location=None, nest_location=None):
         self.n = n
         self.m = m
         self.num_agents = num_agents
         self.agents = [QTableAgent(i) for i in range(num_agents)]
-        self.food_source_location = (0, 0)  # Location A
-        self.nest_location = (n-1, m-1)     # Location B
+        self.food_source_location = food_source_location if food_source_location is not None else (0, 0)  # Location A
+        self.nest_location = nest_location if nest_location is not None else (n-1, m-1)     # Location B
         self.rewards = np.zeros((n, m))
         self.rewards[self.food_source_location[0], self.food_source_location[1]] = 10
         self.rewards[self.nest_location[0], self.nest_location[1]] = 50
