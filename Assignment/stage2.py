@@ -351,8 +351,10 @@ def test_single_configuration(env, b_agents, a_agents, max_steps):
     successful_agent = None  # Track which agent succeeded
     
     while not done and steps < max_steps:
-        # Each agent takes their turn
-        for agent_id in range(env.num_agents):
+        # Each agent takes their turn in round-robin order
+        for _ in range(env.num_agents):
+            agent_id = env.get_next_agent()  # Use the same round-robin order as training
+            
             # Get state and select action (no exploration, pure exploitation)
             state = env.get_state(agent_id)
             state = np.array(state)  # Convert state to numpy array
@@ -403,7 +405,7 @@ if __name__ == "__main__":
     t = process_time()
     
     # Run training only
-    '''
+    
     print("\nStarting training...")
     trained_model = main()  # Store the returned model
     
@@ -434,6 +436,7 @@ if __name__ == "__main__":
     print(f"Timeouts: {eval_stats['failures']['timeout']}")
     print(f"Incomplete paths: {eval_stats['failures']['incomplete']}")
     
+    '''
     
     elapsed_time = process_time() - t
     print(f"\nFinished in {elapsed_time:.2f} seconds.") 
