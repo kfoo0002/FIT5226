@@ -26,10 +26,10 @@ def main():
     grid_cols = 5
     num_actions = 4  # up, down, left, right
     num_agents = 4
-    gamma = 0.997    # discount factor
+    gamma = 0.9    # discount factor 0.997
     batch_size = 200  # Increased batch size for more stable training
     buffer_size = 50000  # Increased buffer size for more diverse experiences
-    target_update = 500 # Update target network every 500 steps
+    target_update = 1000 # Update target network every 500 steps
     
     # Budgets
     step_budget = 1_500_000

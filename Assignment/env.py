@@ -236,7 +236,7 @@ class GridWorldEnvironment:
             reward = 50  # Direct dropoff reward
             
         # Track agent's progress state
-        current_pos = next_position  # Use next_position since we haven't updated position yet
+        current_pos = next_position
         
         # Check for A→B→A round trip
         if self.agent_states[agent_id] == 0 and current_pos == self.food_source_location and agent.has_item:
@@ -261,6 +261,13 @@ class GridWorldEnvironment:
             self.round_trip_count += 1
             
         agent.position = next_position
+        
+        # Update direction based on item status
+        if agent.has_item:           # carrying ⇒ moving toward B
+            agent.direction = True   # True == A→B
+        else:                        # not carrying ⇒ moving toward A
+            agent.direction = False  # False == B→A
+            
         return reward
 
     def visualize(self, steps, total_reward):
