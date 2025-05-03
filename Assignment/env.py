@@ -59,6 +59,8 @@ class GridWorldEnvironment:
         
         # Round trip tracking
         self.round_trip_count = 0  # Track number of completed round trips
+        self.agent_states = [0] * num_agents  # Track state for each agent
+        self.agent_round_trips = [False] * num_agents  # Track completed round trips
 
     def set_update_sequence(self, sequence_type='round_robin'):
         """
@@ -117,22 +119,23 @@ class GridWorldEnvironment:
             # Randomly place agent at either A or B
             if np.random.random() < 0.5:
                 agent.position = self.food_source_location
-                agent.direction = True  # A->B
                 agent.has_item = 1  # Start with item if at A
             else:
                 agent.position = self.nest_location
-                agent.direction = False  # B->A
                 agent.has_item = 0  # No item if starting at B
             agent.local_mask = 0
             agent.previous_position = None
             agent.collision_penalty = 0
-            agent.completed_round_trip = False  # Reset round trip completion
+            agent.completed_round_trip = False
+            agent.update_order = 0
         
-        # Reset clock and update sequence
-        self.clock = 0
-        self.set_update_sequence()
+        # Reset environment state
         self.collision_count = 0
-        self.round_trip_count = 0  # Reset round trip count
+        self.round_trip_count = 0
+        self.clock = 0
+        self.agent_states = [0] * self.num_agents  # Reset agent states
+        self.agent_round_trips = [False] * self.num_agents  # Reset round trip tracking
+        self.set_update_sequence()
 
     def get_state(self, agent_id):
         agent = self.agents[agent_id]
@@ -226,25 +229,36 @@ class GridWorldEnvironment:
         # Check for automatic pickup at A
         if next_position == self.food_source_location:
             agent.has_item = 1
-            agent.direction = True  # Set direction to A->B
             reward = 10  # Direct pickup reward
         # Check for automatic dropoff at B
         elif next_position == self.nest_location and agent.has_item:
             agent.has_item = 0
-            agent.direction = False  # Set direction to B->A
             reward = 50  # Direct dropoff reward
             
-        # Check for round trip completion
-        if agent.direction == True:  # A->B direction
-            # A->B round trip: Start at A with item, go to B to drop off, return to A without item
-            if next_position == self.food_source_location and not agent.has_item:
-                agent.completed_round_trip = True  # Completed A->B->A
-                self.round_trip_count += 1  # Increment round trip count
-        else:  # B->A direction
-            # B->A round trip: Start at B without item, go to A to pick up, return to B to drop off
-            if next_position == self.nest_location and not agent.has_item:
-                agent.completed_round_trip = True  # Completed B->A->B
-                self.round_trip_count += 1  # Increment round trip count
+        # Track agent's progress state
+        current_pos = next_position  # Use next_position since we haven't updated position yet
+        
+        # Check for A→B→A round trip
+        if self.agent_states[agent_id] == 0 and current_pos == self.food_source_location and agent.has_item:
+            self.agent_states[agent_id] = 1  # Picked up item at A, going to B
+        elif self.agent_states[agent_id] == 1 and current_pos == self.nest_location and not agent.has_item:
+            self.agent_states[agent_id] = 2  # Dropped off at B
+        elif self.agent_states[agent_id] == 2 and current_pos == self.food_source_location and not agent.has_item:
+            self.agent_states[agent_id] = 3  # Completed A→B→A round trip
+            self.agent_round_trips[agent_id] = True
+            agent.completed_round_trip = True
+            self.round_trip_count += 1
+        
+        # Check for B→A→B round trip
+        elif self.agent_states[agent_id] == 0 and current_pos == self.nest_location and not agent.has_item:
+            self.agent_states[agent_id] = 1  # Going to A without item
+        elif self.agent_states[agent_id] == 1 and current_pos == self.food_source_location and agent.has_item:
+            self.agent_states[agent_id] = 2  # Picked up at A, going back to B
+        elif self.agent_states[agent_id] == 2 and current_pos == self.nest_location and not agent.has_item:
+            self.agent_states[agent_id] = 3  # Completed B→A→B round trip
+            self.agent_round_trips[agent_id] = True
+            agent.completed_round_trip = True
+            self.round_trip_count += 1
             
         agent.position = next_position
         return reward

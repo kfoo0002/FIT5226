@@ -25,8 +25,8 @@ def main():
     num_actions = 4  # up, down, left, right
     num_agents = 4
     gamma = 0.997    # discount factor
-    batch_size = 200 
-    buffer_size = 1000 
+    batch_size = 32  # Reduced batch size for more frequent updates
+    buffer_size = 10000 
     target_update = 500 # Update target network every 500 steps
     
     # Budgets
@@ -38,7 +38,7 @@ def main():
     environment = GridWorldEnvironment(grid_rows, grid_cols, num_agents=num_agents)
     
     # Initialize replay buffers for each agent
-    replay_buffers = [ReplayBuffer(buffer_size) for _ in range(num_agents)]
+    replay_buffers = [ReplayBuffer(buffer_size=10000) for _ in range(environment.num_agents)]
     
     # Initialize epsilon scheduler and metric logger
     epsilon_scheduler = EpsilonScheduler(start_eps=1.0, min_eps=0.1, decay_factor=0.997)
@@ -91,7 +91,6 @@ def main():
                 
                 # Take action and observe reward
                 reward = environment.take_action(agent_id, action)
-                reward_per_episode += reward
                 
                 # Check for collisions after this agent's move
                 environment.check_collisions()
@@ -99,6 +98,8 @@ def main():
                     # Add collision penalties to all agents involved
                     for a_id in range(environment.num_agents):
                         if environment.agents[a_id].collision_penalty != 0:
+                            if a_id == agent_id:  # Add penalty to current agent's reward
+                                reward += environment.agents[a_id].collision_penalty
                             reward_per_episode += environment.agents[a_id].collision_penalty
                             environment.agents[a_id].collision_penalty = 0  # Reset collision penalty
                     
@@ -138,7 +139,7 @@ def main():
             episode_round_trips = environment.round_trip_count
             
             # Update target network less frequently
-            if number_of_steps % (target_update * 2) == 0:  # Update every 1000 steps instead of 500
+            if total_steps % target_update == 0:  # Update target network every 500 steps
                 update_target()
         
         # Log episode metrics
@@ -255,6 +256,7 @@ def evaluate_model():
             # Test each agent distribution for this A-B configuration
             for b_agents, a_agents in AGENT_DISTRIBUTIONS:
                 total_configs += 1
+                stats['total_tests'] = total_configs  # Set total_tests equal to total_configs
                 
                 print(f"\nTest Configuration #{total_configs}:")
                 print(f"A position: {a_pos}, B position: {b_pos}")
@@ -401,6 +403,7 @@ if __name__ == "__main__":
     print("\nStarting training...")
     trained_model = main()  # Store the returned model
     '''
+    
     
     # Commented out evaluation code for later use
     
