@@ -9,6 +9,8 @@ from utils import (set_seed, EpsilonScheduler, MetricLogger,
                   prepare_torch, update_target, get_qvals, get_maxQ, train_one_step,
                   model)  # Import model from utils
 from collections import deque
+import csv
+from datetime import datetime
 
 def main():
     # Set random seed for reproducibility
@@ -19,14 +21,14 @@ def main():
     
     # Hyperparameters
     num_episodes = 1000
-    max_steps = 200
+    max_steps = 120
     grid_rows = 5
     grid_cols = 5
     num_actions = 4  # up, down, left, right
     num_agents = 4
     gamma = 0.997    # discount factor
-    batch_size = 32  # Reduced batch size for more frequent updates
-    buffer_size = 10000 
+    batch_size = 200  # Increased batch size for more stable training
+    buffer_size = 50000  # Increased buffer size for more diverse experiences
     target_update = 500 # Update target network every 500 steps
     
     # Budgets
@@ -223,6 +225,14 @@ def evaluate_model():
         (4,0)
     ]
     
+    # Create CSV file with timestamp
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    csv_filename = f'test_results_{timestamp}.csv'
+    
+    # CSV headers
+    headers = ['Test #', 'A Position', 'B Position', 'B Agents', 'A Agents', 
+               'Result', 'Steps Taken', 'Failure Reason']
+    
     total_configs = 0
     successful_configs = 0
     stats = {
@@ -242,71 +252,96 @@ def evaluate_model():
         }
     }
 
-    # Generate all possible A-B configurations
-    for a_pos_idx in range(GRID_SIZE * GRID_SIZE):
-        a_pos = (a_pos_idx // GRID_SIZE, a_pos_idx % GRID_SIZE)
+    # Open CSV file for writing
+    with open(csv_filename, 'w', newline='') as csvfile:
+        writer = csv.writer(csvfile)
+        writer.writerow(headers)
         
-        for b_pos_idx in range(GRID_SIZE * GRID_SIZE):
-            b_pos = (b_pos_idx // GRID_SIZE, b_pos_idx % GRID_SIZE)
+        # Generate all possible A-B configurations
+        for a_pos_idx in range(GRID_SIZE * GRID_SIZE):
+            a_pos = (a_pos_idx // GRID_SIZE, a_pos_idx % GRID_SIZE)
             
-            # Skip if A and B are in same position
-            if a_pos == b_pos:
-                continue
+            for b_pos_idx in range(GRID_SIZE * GRID_SIZE):
+                b_pos = (b_pos_idx // GRID_SIZE, b_pos_idx % GRID_SIZE)
                 
-            # Test each agent distribution for this A-B configuration
-            for b_agents, a_agents in AGENT_DISTRIBUTIONS:
-                total_configs += 1
-                stats['total_tests'] = total_configs  # Set total_tests equal to total_configs
-                
-                print(f"\nTest Configuration #{total_configs}:")
-                print(f"A position: {a_pos}, B position: {b_pos}")
-                print(f"Agents at B: {b_agents}, Agents at A: {a_agents}")
-                
-                # Initialize environment with this configuration
-                env = GridWorldEnvironment(
-                    n=GRID_SIZE,
-                    m=GRID_SIZE,
-                    num_agents=4,
-                    food_source_location=a_pos,
-                    nest_location=b_pos
-                )
-                
-                # Set up agents at their starting positions
-                success, steps = test_single_configuration(
-                    env, 
-                    b_agents, 
-                    a_agents, 
-                    MAX_STEPS
-                )
-                
-                print(f"Result: {'Success' if success else 'Failure'}")
-                if success:
-                    print(f"Steps taken: {steps}")
-                else:
-                    if steps >= MAX_STEPS:
-                        print("Failed due to: Timeout")
-                    elif env.collision_count > 0:
-                        print("Failed due to: Collision")
+                # Skip if A and B are in same position
+                if a_pos == b_pos:
+                    continue
+                    
+                # Test each agent distribution for this A-B configuration
+                for b_agents, a_agents in AGENT_DISTRIBUTIONS:
+                    total_configs += 1
+                    stats['total_tests'] = total_configs
+                    
+                    print(f"\nTest Configuration #{total_configs}:")
+                    print(f"A position: {a_pos}, B position: {b_pos}")
+                    print(f"Agents at B: {b_agents}, Agents at A: {a_agents}")
+                    
+                    # Initialize environment with this configuration
+                    env = GridWorldEnvironment(
+                        n=GRID_SIZE,
+                        m=GRID_SIZE,
+                        num_agents=4,
+                        food_source_location=a_pos,
+                        nest_location=b_pos
+                    )
+                    
+                    # Set up agents at their starting positions
+                    success, steps = test_single_configuration(
+                        env, 
+                        b_agents, 
+                        a_agents, 
+                        MAX_STEPS
+                    )
+                    
+                    # Determine failure reason
+                    failure_reason = ''
+                    if not success:
+                        if steps >= MAX_STEPS:
+                            failure_reason = 'Timeout'
+                        elif env.collision_count > 0:
+                            failure_reason = 'Collision'
+                        else:
+                            failure_reason = 'Incomplete path'
+                    
+                    # Write test results to CSV
+                    writer.writerow([
+                        total_configs,
+                        f"{a_pos}",
+                        f"{b_pos}",
+                        b_agents,
+                        a_agents,
+                        'Success' if success else 'Failure',
+                        steps,
+                        failure_reason
+                    ])
+                    
+                    # Print results to terminal
+                    print(f"Result: {'Success' if success else 'Failure'}")
+                    if success:
+                        print(f"Steps taken: {steps}")
                     else:
-                        print("Failed due to: Incomplete path")
-                
-                if success:
-                    successful_configs += 1
-                    stats['successful_tests'] += 1
-                    stats['avg_steps_successful'] += steps
-                    stats['distribution_success'][f'{b_agents},{a_agents}'] += 1
-                else:
-                    if steps >= MAX_STEPS:
-                        stats['failures']['timeout'] += 1
-                    elif env.collision_count > 0:
-                        stats['failures']['collisions'] += 1
+                        print(f"Failed due to: {failure_reason}")
+                    
+                    if success:
+                        successful_configs += 1
+                        stats['successful_tests'] += 1
+                        stats['avg_steps_successful'] += steps
+                        stats['distribution_success'][f'{b_agents},{a_agents}'] += 1
                     else:
-                        stats['failures']['incomplete'] += 1
+                        if steps >= MAX_STEPS:
+                            stats['failures']['timeout'] += 1
+                        elif env.collision_count > 0:
+                            stats['failures']['collisions'] += 1
+                        else:
+                            stats['failures']['incomplete'] += 1
 
     # Calculate final statistics
     success_rate = successful_configs / total_configs
     if stats['successful_tests'] > 0:
         stats['avg_steps_successful'] /= stats['successful_tests']
+    
+    print(f"\nTest results have been exported to {csv_filename}")
     
     return success_rate, stats
 
