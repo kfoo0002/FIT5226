@@ -38,7 +38,7 @@ def main():
     environment = GridWorldEnvironment(grid_rows, grid_cols, num_agents=num_agents)
     
     # Initialize replay buffers for each agent
-    replay_buffers = [ReplayBuffer(buffer_size=10000) for _ in range(environment.num_agents)]
+    replay_buffers = [ReplayBuffer(10000) for _ in range(environment.num_agents)]
     
     # Initialize epsilon scheduler and metric logger
     epsilon_scheduler = EpsilonScheduler(start_eps=1.0, min_eps=0.1, decay_factor=0.997)
@@ -375,17 +375,21 @@ def test_single_configuration(env, b_agents, a_agents, max_steps):
             current_pos = agent.position
             
             # Update B→A→B state for this agent
-            if agent_states[agent_id] == 0 and current_pos == env.food_source_location and not agent.has_item:
-                agent_states[agent_id] = 1  # Reached A without item
-            elif agent_states[agent_id] == 1 and current_pos == env.food_source_location and agent.has_item:
-                agent_states[agent_id] = 2  # Picked up item at A
-            elif agent_states[agent_id] == 2 and current_pos == env.nest_location and not agent.has_item:
-                agent_states[agent_id] = 3  # Completed B→A→B
+            if agent_states[agent_id] == 0 and current_pos == env.food_source_location:
+                agent_states[agent_id] = 1  # Reached A (item automatically given)
+            elif agent_states[agent_id] == 1 and current_pos == env.nest_location and not agent.has_item:
+                agent_states[agent_id] = 2  # Completed B→A→B
                 successful_agent = agent_id
                 done = True
                 break  # Exit the agent loop if any agent succeeds
         
+        # Count one step only after all 4 agents have moved
         steps += 1
+        if steps >= max_steps:  # Check step limit after all agents have moved
+            break
+        
+        if done:  # Break outer loop only if task is completed
+            break
     
     # Test is successful if:
     # 1. An agent completed their round trip
@@ -402,8 +406,8 @@ if __name__ == "__main__":
     '''
     print("\nStarting training...")
     trained_model = main()  # Store the returned model
-    '''
     
+    '''
     
     # Commented out evaluation code for later use
     
