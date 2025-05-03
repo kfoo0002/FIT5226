@@ -313,13 +313,11 @@ def evaluate_model():
 def test_single_configuration(env, b_agents, a_agents, max_steps):
     """
     Tests a single configuration with the specified distribution of agents.
-    
     Args:
         env: GridWorldEnvironment instance
         b_agents: Number of agents at point B
         a_agents: Number of agents at point A
-        max_steps: Maximum steps allowed
-    
+        max_steps: Maximum steps allowed per agent
     Returns:
         tuple: (success: bool, steps_taken: int)
     """
@@ -342,7 +340,6 @@ def test_single_configuration(env, b_agents, a_agents, max_steps):
         env.agents[i].has_item = False
     
     # Track progress for all agents
-    # 0: at B(no item), 1: going to A(no item), 2: at A(with item), 3: going back to B(with item)
     agent_states = [0] * env.num_agents  # Track state for each agent
     agent_collisions = [False] * env.num_agents  # Track if each agent was involved in a collision
     steps = 0
@@ -350,7 +347,8 @@ def test_single_configuration(env, b_agents, a_agents, max_steps):
     success = False
     successful_agent = None  # Track which agent succeeded
     
-    while not done and steps < max_steps:
+    # Allow each agent to make max_steps moves (total moves = max_steps * 4)
+    while not done and steps < max_steps * env.num_agents:
         # Each agent takes their turn in round-robin order
         for _ in range(env.num_agents):
             agent_id = env.get_next_agent()  # Use the same round-robin order as training
@@ -384,11 +382,11 @@ def test_single_configuration(env, b_agents, a_agents, max_steps):
                 successful_agent = agent_id
                 done = True
                 break  # Exit the agent loop if any agent succeeds
-        
-        # Count one step only after all 4 agents have moved
-        steps += 1
-        if steps >= max_steps:  # Check step limit after all agents have moved
-            break
+            
+            # Count each agent's move
+            steps += 1
+            if steps >= max_steps * env.num_agents:  # Check total step limit
+                break
         
         if done:  # Break outer loop only if task is completed
             break
@@ -409,7 +407,7 @@ if __name__ == "__main__":
     print("\nStarting training...")
     trained_model = main()  # Store the returned model
     
-    '''
+    
     
     # Commented out evaluation code for later use
     
@@ -436,7 +434,7 @@ if __name__ == "__main__":
     print(f"Timeouts: {eval_stats['failures']['timeout']}")
     print(f"Incomplete paths: {eval_stats['failures']['incomplete']}")
     
-    '''
+    
     
     elapsed_time = process_time() - t
     print(f"\nFinished in {elapsed_time:.2f} seconds.") 
