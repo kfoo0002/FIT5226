@@ -28,8 +28,9 @@ def main():
     num_agents = 4
     gamma = 0.9    # discount factor 0.997
     batch_size = 200  # Increased batch size for more stable training
-    buffer_size = 50000  # Increased buffer size for more diverse experiences
+    buffer_size = 10000  # Increased buffer size for more diverse experiences
     target_update = 1000 # Update target network every 500 steps
+    decay_factor = 0.997
     
     # Budgets
     step_budget = 1_500_000
@@ -40,10 +41,10 @@ def main():
     environment = GridWorldEnvironment(grid_rows, grid_cols, num_agents=num_agents)
     
     # Initialize replay buffers for each agent
-    replay_buffers = [ReplayBuffer(10000) for _ in range(environment.num_agents)]
+    replay_buffers = [ReplayBuffer(buffer_size) for _ in range(environment.num_agents)]
     
     # Initialize epsilon scheduler and metric logger
-    epsilon_scheduler = EpsilonScheduler(start_eps=1.0, min_eps=0.1, decay_factor=0.997)
+    epsilon_scheduler = EpsilonScheduler(start_eps=1.0, min_eps=0.1, decay_factor=decay_factor)
     metric_logger = MetricLogger()
     
     # plt.ion()  # Commented out to disable visualization during training

@@ -52,7 +52,8 @@ def prepare_torch():
 def update_target():
     """Copy weights from policy network to target network"""
     global model, model2
-    model2.load_state_dict(model.state_dict())
+    with torch.no_grad():
+        model2.load_state_dict(model.state_dict())
 
 def get_qvals(state):
     """Get Q-values for a state using policy network"""
@@ -83,7 +84,8 @@ def train_one_step(states, actions, targets, gamma):
     X = Q1.gather(dim=1, index=action_batch).squeeze()
     
     # Convert targets to tensor with same shape as X [batch_size]
-    Y = torch.tensor(targets, dtype=torch.float32)
+    with torch.no_grad():
+        Y = torch.tensor(targets, dtype=torch.float32)
     
     # Compute loss and update
     loss = loss_fn(X, Y)
