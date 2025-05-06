@@ -294,6 +294,7 @@ class MetricLogger:
         
         plt.tight_layout()
         plt.savefig('training_metrics.png')
+        plt.show()  # This will display the plot in the terminal
         plt.close()
 
 def train_model():
