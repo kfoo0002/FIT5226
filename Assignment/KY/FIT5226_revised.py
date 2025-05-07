@@ -329,7 +329,7 @@ def train_model():
     loss_fn = nn.MSELoss()
 
     # Training parameters and budgets
-    num_episodes = 100
+    num_episodes = 8000
     max_steps_per_episode = 120   # safety cap on steps per episode (will often terminate earlier)
     buffer_capacity = 50000
     step_budget = 1_500_000       # max training steps (across all agents)
@@ -512,6 +512,14 @@ def evaluate_model(model):
             q_vals = model(state_t)
         return int(torch.argmax(q_vals).item())
 
+    # Specific test cases to visualize
+    test_cases = [
+        ((0, 0), (1, 1)),
+        ((0, 0), (2, 1)),
+        ((0, 0), (3, 1)),
+        ((0, 0), (4, 1))
+    ]
+
     # Iterate over all possible A, B placements
     for ax in range(GRID_SIZE):
         for ay in range(GRID_SIZE):
@@ -543,6 +551,14 @@ def evaluate_model(model):
                         test_env.agent_states[i] = 0
                         test_env.agent_round_trips[i] = False
 
+                    # Check if this is one of our specific test cases
+                    is_specific_case = (ax, ay, bx, by) in [(0, 0, 1, 1), (0, 0, 2, 1), (0, 0, 3, 1), (0, 0, 4, 1)]
+                    if is_specific_case:
+                        print("\nPath visualization details:")
+                        print(f"Point A at: ({ax}, {ay})")
+                        print(f"Point B at: ({bx}, {by})")
+                        path = []  # Store the path for visualization
+
                     # Simulate until first agent (index 0) completes B->A->B or until 25 steps per agent
                     agent0_success = False
                     collided = False
@@ -550,6 +566,8 @@ def evaluate_model(model):
                     steps_taken = 0
                     for t in range(max_steps * test_env.num_agents):
                         aid = test_env.get_next_agent()
+                        if aid == 0 and is_specific_case:  # Only track path for agent 0 in specific cases
+                            path.append(test_env.agents[0].position)
                         state = test_env.get_state(aid)
                         action = greedy_action(state)
                         test_env.take_action(aid, action)
@@ -564,8 +582,11 @@ def evaluate_model(model):
                         # Check if agent 0 completed B->A->B (round trip)
                         if test_env.agent_round_trips[0]:
                             agent0_success = True
+                            if is_specific_case:
+                                path.append(test_env.agents[0].position)  # Add final position
                             break
                         steps_taken += 1
+
                     # Determine success/failure for this test
                     if agent0_success and not collided:
                         success_count += 1
@@ -580,11 +601,122 @@ def evaluate_model(model):
                         else:
                             stats['failures']['incomplete'] += 1
 
+                    # Print path visualization for specific test cases
+                    if is_specific_case:
+                        print(f"Success: {agent0_success and not collided}")
+                        print(f"Number of steps: {steps_taken}")
+                        print("\nMovement sequence:")
+                        for i in range(len(path)-1):
+                            print(f"Step {i+1}: {path[i]} -> {path[i+1]}")
+                        print("-" * 50)
+
     # Calculate success rate and average steps
     success_rate = success_count / total_tests
     if stats['successful_tests'] > 0:
         stats['avg_steps_successful'] /= stats['successful_tests']
     return success_rate, stats
+
+def visualize_agent_path(model, a_point, b_point, max_steps=25):
+    """
+    Visualize the path of an agent starting at point B for a specific A-B configuration.
+    
+    Args:
+        model: The trained DQN model
+        a_point: Tuple (x,y) coordinates for point A
+        b_point: Tuple (x,y) coordinates for point B
+        max_steps: Maximum number of steps per agent (default: 25)
+    """
+    GRID_SIZE = 5
+    # Helper: choose greedy action using the trained model
+    def greedy_action(state):
+        state_t = torch.tensor(state, dtype=torch.float32)
+        with torch.no_grad():
+            q_vals = model(state_t)
+        return int(torch.argmax(q_vals).item())
+
+    # Initialize environment with given A and B
+    test_env = GridWorldEnvironment(n=GRID_SIZE, m=GRID_SIZE, num_agents=4,
+                                  food_source_location=a_point,
+                                  nest_location=b_point)
+    
+    # Set fixed distribution: 1 agent at B, 3 agents at A
+    for i in range(test_env.num_agents):
+        if i < 1:  # First agent at B
+            test_env.agents[i].position = test_env.nest_location
+            test_env.agents[i].has_item = 0
+            test_env.agents[i].direction = False
+        else:  # Last 3 agents at A
+            test_env.agents[i].position = test_env.food_source_location
+            test_env.agents[i].has_item = 1
+            test_env.agents[i].direction = True
+    
+    # Reset environment state
+    test_env.clock = 0
+    test_env.collision_count = 0
+    test_env.round_trip_count = 0
+    for i in range(test_env.num_agents):
+        test_env.agent_states[i] = 0
+        test_env.agent_round_trips[i] = False
+
+    # Print initial configuration
+    print("\nPath visualization details:")
+    print(f"Point A at: {a_point}")
+    print(f"Point B at: {b_point}")
+    path = []  # Store the path for visualization
+    agent0_steps = 0  # Count steps only for agent 0
+
+    # Simulate until first agent completes B->A->B or until max steps
+    agent0_success = False
+    collided = False
+    got_stuck = False
+    
+    for t in range(max_steps * test_env.num_agents):
+        aid = test_env.get_next_agent()
+        if aid == 0:  # Track path for agent 0
+            current_pos = test_env.agents[0].position
+            path.append(current_pos)
+            agent0_steps += 1  # Increment step count only for agent 0
+            
+            # Check if we're stuck in a loop or at a position
+            if len(path) > 2:
+                # Check for loops (repeating sequence of positions)
+                if len(path) >= 4:
+                    if path[-1] == path[-3] and path[-2] == path[-4]:
+                        got_stuck = True
+                        break
+                # Check if we're stuck at a position
+                if path[-1] == path[-2] and path[-1] == path[-3]:
+                    got_stuck = True
+                    break
+        
+        state = test_env.get_state(aid)
+        action = greedy_action(state)
+        test_env.take_action(aid, action)
+        test_env.check_collisions()
+        
+        # Check for collisions
+        if test_env.collision_count > 0:
+            for ag in test_env.agents:
+                if ag.collision_penalty != 0:
+                    if ag.agent_id == 0:
+                        collided = True
+                    ag.collision_penalty = 0
+        
+        # Check if agent 0 completed B->A->B (round trip)
+        if test_env.agent_round_trips[0]:
+            agent0_success = True
+            path.append(test_env.agents[0].position)  # Add final position
+            break
+
+    # Print results
+    print(f"Success: {agent0_success and not collided}")
+    print(f"Number of steps: {agent0_steps}")  # Show only agent 0's steps
+    print("\nMovement sequence:")
+    for i in range(len(path)-1):
+        print(f"Step {i+1}: {path[i]} -> {path[i+1]}")
+    print("-" * 50)
+    
+    return agent0_success and not collided, agent0_steps, path
 
 def main():
     # Train the model
@@ -595,6 +727,18 @@ def main():
     print(f"Success Rate: {success_rate*100:.2f}%")
     print("Failures breakdown:", eval_stats['failures'])
     print(f"Average steps for successful episodes: {eval_stats['avg_steps_successful']:.2f}")
+    
+    # Visualize specific test cases
+    test_cases = [
+        ((0, 0), (1, 1)),
+        ((0, 0), (2, 1)),
+        ((0, 0), (3, 1)),
+        ((0, 0), (4, 1))
+    ]
+    
+    print("\nVisualizing specific test cases:")
+    for a_point, b_point in test_cases:
+        visualize_agent_path(trained_model, a_point, b_point)
 
 if __name__ == "__main__":
     main() 
